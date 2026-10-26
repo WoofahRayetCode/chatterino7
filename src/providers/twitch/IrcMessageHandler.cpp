@@ -9,7 +9,10 @@
 #include "common/Common.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/blerp/BlerpController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
+#include "controllers/notifications/NotificationController.hpp"
+#include "controllers/notifications/ViewerSoundController.hpp"
 #include "messages/Link.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
@@ -1057,11 +1060,35 @@ void IrcMessageHandler::handleJoinMessage(Communi::IrcMessage *message)
     {
         twitchChannel->addSystemMessage("joined channel");
         twitchChannel->joined.invoke();
+        if (auto *app = getApp())
+        {
+            if (auto *notifs = app->getNotifications())
+            {
+                if (auto *vs = notifs->viewerSounds())
+                {
+                    vs->markSelfJoinedChannel("twitch", twitchChannel->getName());
+                }
+            }
+        }
     }
-    else if (getSettings()->showJoins.getValue())
+    else
     {
-        twitchChannel->addJoinedUser(message->nick(), twitchChannel->isMod(),
-                                     twitchChannel->isBroadcaster());
+        if (auto *app = getApp())
+        {
+            if (auto *notifs = app->getNotifications())
+            {
+                if (auto *vs = notifs->viewerSounds())
+                {
+                    vs->onViewerJoined("twitch", twitchChannel->getName(),
+                                       message->nick());
+                }
+            }
+        }
+        if (getSettings()->showJoins.getValue())
+        {
+            twitchChannel->addJoinedUser(message->nick(), twitchChannel->isMod(),
+                                         twitchChannel->isBroadcaster());
+        }
     }
 }
 
@@ -1228,6 +1255,40 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
              getSettings()->shownSimilarTriggerHighlights))
         {
             MessageBuilder::triggerHighlights(chan, alert);
+        }
+
+        if (!message->tags().has("historical") &&
+            sink.sinkTraits().has(MessageSinkTrait::UpdateCurrentUserState))
+        {
+            const auto currentUser =
+                getApp()->getAccounts()->twitch.getCurrent();
+            const bool isSelf =
+                currentUser &&
+                (message->tag("user-id") == currentUser->getUserId() ||
+                 msg->loginName.compare(currentUser->getUserName(),
+                                        Qt::CaseInsensitive) == 0);
+            MessageBuilder::triggerChatMessageSound(chan, msg, isSelf,
+                                                    !alert.sound.isEmpty());
+        }
+
+        if (getSettings()->blerpEnabled.getValue() &&
+            getSettings()->blerpDetectChatAndRedemptions.getValue())
+        {
+            if (auto ev = BlerpPayloadParser::parseBotChatMessage(
+                    msg->loginName, originalContent, chan->getName(),
+                    getSettings()->blerpBotUsernames.getValue()))
+            {
+                if (auto *app = getApp())
+                {
+                    if (auto *notifs = app->getNotifications())
+                    {
+                        if (auto *bc = notifs->blerp())
+                        {
+                            bc->recordBlerp(*ev, false);
+                        }
+                    }
+                }
+            }
         }
 
         const auto highlighted = msg->flags.has(MessageFlag::Highlighted);

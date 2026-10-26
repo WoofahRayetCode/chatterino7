@@ -172,6 +172,10 @@ public:
     static void triggerHighlights(const Channel *channel,
                                   const HighlightAlert &alert);
 
+    static void triggerChatMessageSound(const Channel *channel,
+                                        const MessagePtr &msg, bool isSelf,
+                                        bool alreadyPlayedHighlightSound);
+
     void appendChannelPointRewardMessage(const ChannelPointReward &reward,
                                          bool isMod, bool isBroadcaster);
 

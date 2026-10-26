@@ -5,6 +5,7 @@
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/emotes/EmoteController.hpp"
+#include "controllers/notifications/NotificationController.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Link.hpp"
 #include "messages/Message.hpp"
@@ -381,6 +382,14 @@ void KickChannel::updateStreamData(const KickChannelInfo &info)
 
         if (this->streamData_.isLive)
         {
+            getApp()->getNotifications()->notifyKickChannelLive({
+                .slug = this->slug(),
+                .displayName = this->getDisplayName(),
+                .title = info.streamTitle,
+                .category = info.category.name,
+                .isInitialUpdate = !this->initializedLiveState_,
+            });
+
             this->addMessage(MessageBuilder::makeLiveMessage(
                                  HelixMinimalUser{
                                      .id = QString::number(this->userID()),
@@ -402,6 +411,7 @@ void KickChannel::updateStreamData(const KickChannelInfo &info)
                 }),
                 MessageContext::Original);
         }
+        this->initializedLiveState_ = true;
         this->liveStatusChanged.invoke();
     }
     if (this->streamData_.title != info.streamTitle)

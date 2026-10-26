@@ -12,8 +12,11 @@
 #include "controllers/emotes/EmoteController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
+#include "controllers/highlights/Sounds.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
+#include "controllers/notifications/NotificationController.hpp"
+#include "controllers/notifications/ViewerSoundController.hpp"
 #include "controllers/userdata/UserDataController.hpp"
 #include "messages/AsciiArt.hpp"
 #include "messages/Emote.hpp"
@@ -1278,6 +1281,127 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
     }
     actuallyTriggerHighlights(channel->getName(), alert.sound,
                               alert.windowAlert);
+}
+
+void MessageBuilder::triggerChatMessageSound(const Channel *channel,
+                                             const MessagePtr &msg, bool isSelf,
+                                             bool alreadyPlayedHighlightSound)
+{
+    if (channel != nullptr && msg && !msg->loginName.isEmpty())
+    {
+        QString platform = channel->isKickChannel() ? "kick" : "twitch";
+        if (auto *app = getApp())
+        {
+            if (auto *notifs = app->getNotifications())
+            {
+                if (auto *vs = notifs->viewerSounds())
+                {
+                    bool handled = vs->handleViewerMessage(
+                        platform, channel->getName(), msg->loginName, isSelf,
+                        alreadyPlayedHighlightSound);
+                    if (handled)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!getSettings()->chatSoundEnabled)
+    {
+        return;
+    }
+
+    if (channel == nullptr || !channel->isTwitchOrKickChannel())
+    {
+        return;
+    }
+
+    if (!getSettings()->chatSoundAllChannels &&
+        !getSettings()->isChatSoundChannel(channel->getName()))
+    {
+        return;
+    }
+
+    if (getApp()->getStreamerMode()->isEnabled() &&
+        getSettings()->streamerModeMuteMentions)
+    {
+        return;
+    }
+
+    if (getSettings()->isMutedChannel(channel->getName()))
+    {
+        return;
+    }
+
+    if (alreadyPlayedHighlightSound)
+    {
+        return;
+    }
+
+    if (!msg || msg->flags.hasAny({
+                    MessageFlag::System,
+                    MessageFlag::DoNotTriggerNotification,
+                    MessageFlag::RecentMessage,
+                    MessageFlag::Timeout,
+                    MessageFlag::ClearChat,
+                    MessageFlag::ModerationAction,
+                    MessageFlag::Disabled,
+                }))
+    {
+        return;
+    }
+
+    if (isSelf && getSettings()->chatSoundIgnoreSelf)
+    {
+        return;
+    }
+
+    if (getSettings()->isBlacklistedUser(msg->loginName))
+    {
+        return;
+    }
+
+    const bool hasFocus = (QApplication::focusWidget() != nullptr);
+    if (hasFocus && !getSettings()->chatSoundAlwaysPlay)
+    {
+        return;
+    }
+
+    // Cooldown check
+    const int cooldownMs = getSettings()->chatSoundCooldownMs.getValue();
+    if (cooldownMs > 0)
+    {
+        using Clock = std::chrono::steady_clock;
+        static Clock::time_point lastPlayTime{};
+        auto now = Clock::now();
+        if (now - lastPlayTime < std::chrono::milliseconds(cooldownMs))
+        {
+            return;
+        }
+        lastPlayTime = now;
+    }
+
+    QString soundId = getSettings()->chatSoundId.getValue();
+    QUrl soundUrl;
+    if (auto def = highlights::resolveDefaultSound(soundId))
+    {
+        soundUrl = QUrl(def->resourcePath);
+    }
+    else
+    {
+        soundUrl = QUrl::fromUserInput(soundId);
+    }
+
+    if (soundUrl.isEmpty())
+    {
+        return;
+    }
+
+    float vol =
+        std::clamp(getSettings()->chatSoundVolume.getValue(), 0, 100) / 100.0F;
+    getApp()->getSound()->play(soundUrl, vol);
 }
 
 void MessageBuilder::appendChannelPointRewardMessage(

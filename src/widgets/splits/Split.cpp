@@ -637,6 +637,46 @@ void Split::addShortcuts()
              }
              return "";
          }},
+        {"setChatMessageSounds",
+         [this](const std::vector<QString> &arguments) -> QString {
+             auto channelPtr = this->getSelectedChannel();
+             if (!channelPtr->isTwitchOrKickChannel())
+             {
+                 return "Cannot set chat message sounds in this channel.";
+             }
+
+             auto mode = 2;
+             // 0 is off
+             // 1 is on
+             // 2 is toggle
+             if (!arguments.empty())
+             {
+                 const auto &arg = arguments.at(0);
+                 if (arg == "off")
+                 {
+                     mode = 0;
+                 }
+                 else if (arg == "on")
+                 {
+                     mode = 1;
+                 }
+             }
+
+             const QString channel = channelPtr->getName();
+
+             switch (mode)
+             {
+                 case 0:
+                     getSettings()->setChatSoundChannel(channel, false);
+                     break;
+                 case 1:
+                     getSettings()->setChatSoundChannel(channel, true);
+                     break;
+                 default:
+                     getSettings()->toggleChatSoundChannel(channel);
+             }
+             return "";
+         }},
         {"openSubscriptionPage",
          [this](const auto &) -> QString {
              if (!this->getSelectedChannel()->isTwitchChannel())

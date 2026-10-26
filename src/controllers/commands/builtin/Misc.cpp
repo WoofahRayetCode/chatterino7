@@ -8,6 +8,8 @@
 #include "common/Channel.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/commands/CommandContext.hpp"
+#include "controllers/notifications/NotificationController.hpp"
+#include "controllers/social/SocialPostController.hpp"
 #include "controllers/userdata/UserDataController.hpp"
 #include "providers/kick/KickChannel.hpp"
 #include "providers/kick/KickChatServer.hpp"
@@ -22,6 +24,7 @@
 #include "util/IncognitoBrowser.hpp"
 #include "util/StreamLink.hpp"
 #include "util/Twitch.hpp"
+#include "widgets/dialogs/BlerpHistoryDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/Notebook.hpp"
@@ -778,6 +781,76 @@ QString openUsercard(const CommandContext &ctx)
     userPopup->setData(userName, channel);
     userPopup->moveTo(QCursor::pos(), widgets::BoundsChecking::CursorPosition);
     userPopup->show();
+    return "";
+}
+
+QString announceLive(const CommandContext &ctx)
+{
+    if (auto *sp = getApp()->getNotifications()->socialPosts())
+    {
+        std::optional<LiveStreamContext> builtCtx;
+
+        if (ctx.twitchChannel)
+        {
+            LiveStreamContext lctx;
+            lctx.platform = "Twitch";
+            lctx.channelName = ctx.twitchChannel->getName();
+            lctx.displayName = ctx.twitchChannel->getName();
+            lctx.url = "https://twitch.tv/" + lctx.channelName;
+            lctx.twitchUrl = lctx.url;
+
+            QString kickTarget = sp->resolveKickTarget();
+            if (!kickTarget.isEmpty())
+            {
+                lctx.kickUrl = "https://kick.com/" + kickTarget;
+            }
+
+            const auto streamStatus = ctx.twitchChannel->accessStreamStatus();
+            lctx.title = streamStatus->title;
+            lctx.game = streamStatus->game;
+            lctx.streamId = streamStatus->streamId;
+
+            builtCtx = lctx;
+        }
+        else if (ctx.kickChannel)
+        {
+            LiveStreamContext lctx;
+            lctx.platform = "Kick";
+            lctx.channelName = ctx.kickChannel->getName();
+            lctx.displayName = ctx.kickChannel->getName();
+            lctx.url = "https://kick.com/" + lctx.channelName;
+            lctx.kickUrl = lctx.url;
+
+            QString twitchTarget = sp->resolveTwitchTarget();
+            if (!twitchTarget.isEmpty())
+            {
+                lctx.twitchUrl = "https://twitch.tv/" + twitchTarget;
+            }
+
+            auto streamData = ctx.kickChannel->streamData();
+            lctx.title = streamData.title;
+            lctx.game = streamData.category;
+
+            builtCtx = lctx;
+        }
+
+        if (getSettings()->socialPostTriggerMode.getValue() == 1)
+        {
+            sp->postInBackground(builtCtx);
+        }
+        else
+        {
+            sp->openManualPostDialog(builtCtx);
+        }
+    }
+    return "";
+}
+
+QString openBlerpHistory(const CommandContext & /*ctx*/)
+{
+    auto *dialog = new BlerpHistoryDialog();
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
     return "";
 }
 

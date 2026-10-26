@@ -31,7 +31,7 @@ public:
     // the default sound initialized in the initialize method
     //
     // This function should not block
-    virtual void play(const QUrl &sound) = 0;
+    virtual void play(const QUrl &sound, float volume = 1.0F) = 0;
 };
 
 }  // namespace chatterino

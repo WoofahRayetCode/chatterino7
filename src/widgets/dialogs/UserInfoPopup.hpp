@@ -129,6 +129,7 @@ private:
         QCheckBox *ignoreHighlights = nullptr;
         MarkdownLabel *notesPreview = nullptr;
         LabelButton *notesAdd = nullptr;
+        LabelButton *viewerSound = nullptr;
 
         Label *noMessagesLabel = nullptr;
         ChannelView *latestMessages = nullptr;

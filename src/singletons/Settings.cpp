@@ -1054,6 +1054,58 @@ bool Settings::toggleMutedChannel(const QString &channelName)
     }
 }
 
+bool Settings::isChatSoundChannel(const QString &channelName)
+{
+    auto items = this->chatSoundChannels.readOnly();
+
+    for (const auto &channel : *items)
+    {
+        if (channelName.toLower() == channel.toLower())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Settings::toggleChatSoundChannel(const QString &channelName)
+{
+    if (this->isChatSoundChannel(channelName))
+    {
+        this->setChatSoundChannel(channelName, false);
+        return false;
+    }
+    else
+    {
+        this->chatSoundChannels.append(channelName);
+        return true;
+    }
+}
+
+void Settings::setChatSoundChannel(const QString &channelName, bool enabled)
+{
+    if (enabled)
+    {
+        if (!this->isChatSoundChannel(channelName))
+        {
+            this->chatSoundChannels.append(channelName);
+        }
+    }
+    else
+    {
+        for (std::vector<int>::size_type i = 0;
+             i != this->chatSoundChannels.raw().size(); i++)
+        {
+            if (this->chatSoundChannels.raw()[i].toLower() ==
+                channelName.toLower())
+            {
+                this->chatSoundChannels.removeAt(i);
+                i--;
+            }
+        }
+    }
+}
+
 Settings *Settings::instance_ = nullptr;
 
 Settings::Settings(const Modes &modes, const Args &args,
@@ -1150,6 +1202,10 @@ Settings::Settings(const Modes &modes, const Args &args,
                            this->moderationActions);
     initializeSignalVector(this->signalHolder, this->loggedChannelsSetting,
                            this->loggedChannels);
+    initializeSignalVector(this->signalHolder, this->chatSoundChannelsSetting,
+                           this->chatSoundChannels);
+    initializeSignalVector(this->signalHolder, this->viewerSoundRulesSetting,
+                           this->viewerSoundRules);
 
     instance_ = this;
 

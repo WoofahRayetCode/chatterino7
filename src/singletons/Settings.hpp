@@ -19,6 +19,7 @@
 #include "controllers/logging/ChannelLog.hpp"
 #include "controllers/moderationactions/ModerationAction.hpp"
 #include "controllers/nicknames/Nickname.hpp"
+#include "controllers/notifications/ViewerSoundRule.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "providers/emoji/EmojiStyle.hpp"
 #include "singletons/NativeMessaging.hpp"
@@ -657,6 +658,68 @@ public:
     IntSetting openFromToast = {"/notifications/openFromToast",
                                 static_cast<int>(ToastReaction::OpenInBrowser)};
 
+    /// Chat Sounds
+    BoolSetting chatSoundEnabled = {"/chatSound/enabled", true};
+    BoolSetting chatSoundAllChannels = {"/chatSound/allChannels", false};
+    BoolSetting chatSoundAlwaysPlay = {"/chatSound/alwaysPlaySound", true};
+    BoolSetting chatSoundIgnoreSelf = {"/chatSound/ignoreSelf", true};
+    QStringSetting chatSoundId = {"/chatSound/sound", "004-yfjesse-notification"};
+    IntSetting chatSoundVolume = {"/chatSound/volume", 50};
+    IntSetting chatSoundCooldownMs = {"/chatSound/cooldownMs", 750};
+
+    /// Viewer Sounds (Per-Viewer Join & Chat)
+    BoolSetting viewerSoundsEnabled = {"/viewerSounds/enabled", true};
+    BoolSetting viewerSoundsWalkOnFallback = {"/viewerSounds/walkOnFallback", true};
+    BoolSetting viewerSoundsAlwaysPlay = {"/viewerSounds/alwaysPlaySound", true};
+
+    /// Blerp Integration
+    BoolSetting blerpEnabled = {"/blerp/enabled", true};
+    QStringSetting blerpBrowserSourceUrl = {"/blerp/browserSourceUrl", ""};
+    QStringSetting blerpTargetChannelOverride = {"/blerp/targetChannelOverride", ""};
+    BoolSetting blerpDetectChatAndRedemptions = {"/blerp/detectChatAndRedemptions", true};
+    QStringSetting blerpBotUsernames = {"/blerp/botUsernames", "blerp,blerpbot"};
+    QStringSetting blerpRewardKeywords = {"/blerp/rewardKeywords", "blerp,sound alert,walk-on,walkon"};
+    BoolSetting blerpPlayLocalChime = {"/blerp/playLocalChime", false};
+    QStringSetting blerpChimeSound = {"/blerp/chimeSound", "004-yfjesse-notification"};
+    IntSetting blerpChimeVolume = {"/blerp/chimeVolume", 60};
+
+    /// Go-Live Social Announcements
+    BoolSetting socialPostEnabled = {"/socialPost/enabled", false};
+    IntSetting socialPostTriggerMode = {"/socialPost/triggerMode", 1};  // 0 = Confirm, 1 = Auto (Background)
+    IntSetting socialPostCooldownMinutes = {"/socialPost/cooldownMinutes", 120};
+    QStringSetting socialPostTwitchChannelOverride = {
+        "/socialPost/twitchChannelOverride", ""};
+    QStringSetting socialPostKickChannelOverride = {
+        "/socialPost/kickChannelOverride", ""};
+    QStringSetting socialPostTemplate = {
+        "/socialPost/template",
+        "🔴 LIVE on {platform}! {title}\nPlaying: {game}\n{url}"};
+    QStringSetting socialPostLastTwitchStreamId = {
+        "/socialPost/lastTwitchStreamId", ""};
+    IntSetting socialPostLastPostedEpochSec = {
+        "/socialPost/lastPostedEpochSec", 0};
+
+    // Bluesky (AT Protocol)
+    BoolSetting socialPostBlueskyEnabled = {"/socialPost/bluesky/enabled", false};
+    QStringSetting socialPostBlueskyPdsUrl = {
+        "/socialPost/bluesky/pdsUrl", "https://bsky.social"};
+    QStringSetting socialPostBlueskyHandle = {"/socialPost/bluesky/handle", ""};
+    QStringSetting socialPostBlueskyAppPassword = {
+        "/socialPost/bluesky/appPassword", ""};
+    BoolSetting socialPostBlueskyEmbedCard = {
+        "/socialPost/bluesky/embedCard", true};
+
+    // Twitter / X (0 = Free Browser Web Intent, 1 = Direct API v2 OAuth 1.0a)
+    BoolSetting socialPostTwitterEnabled = {"/socialPost/twitter/enabled", false};
+    IntSetting socialPostTwitterMode = {"/socialPost/twitter/mode", 0};
+    QStringSetting socialPostTwitterApiKey = {"/socialPost/twitter/apiKey", ""};
+    QStringSetting socialPostTwitterApiSecret = {
+        "/socialPost/twitter/apiSecret", ""};
+    QStringSetting socialPostTwitterAccessToken = {
+        "/socialPost/twitter/accessToken", ""};
+    QStringSetting socialPostTwitterAccessSecret = {
+        "/socialPost/twitter/accessSecret", ""};
+
     /// External tools
     // Streamlink
     BoolSetting streamlinkUseCustomPath = {"/external/streamlink/useCustomPath",
@@ -829,6 +892,10 @@ private:
         {"/moderation/actions"};
     ChatterinoSetting<std::vector<ChannelLog>> loggedChannelsSetting = {
         "/logging/channels"};
+    ChatterinoSetting<std::vector<QString>> chatSoundChannelsSetting = {
+        "/chatSound/channels"};
+    ChatterinoSetting<std::vector<ViewerSoundRule>> viewerSoundRulesSetting = {
+        "/viewerSounds/rules"};
     SignalVector<QString> mutedChannels;
 
     IntSetting settingsVersion = {
@@ -870,10 +937,15 @@ public:
     SignalVector<Nickname> nicknames;
     SignalVector<ModerationAction> moderationActions;
     SignalVector<ChannelLog> loggedChannels;
+    SignalVector<QString> chatSoundChannels;
+    SignalVector<ViewerSoundRule> viewerSoundRules;
 
     bool isBlacklistedUser(const QString &username);
     bool isMutedChannel(const QString &channelName);
     bool toggleMutedChannel(const QString &channelName);
+    bool isChatSoundChannel(const QString &channelName);
+    bool toggleChatSoundChannel(const QString &channelName);
+    void setChatSoundChannel(const QString &channelName, bool enabled);
     std::optional<QString> matchNickname(const QString &username);
     void mute(const QString &channelName);
     void unmute(const QString &channelName);

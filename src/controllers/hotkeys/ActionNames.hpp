@@ -210,6 +210,17 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .argumentsPromptHover =
                   "Should highlight sounds be enabled, disabled or toggled",
           }},
+         {"setChatMessageSounds",
+          ActionDefinition{
+              .displayName = "Set chat message sounds",
+              .argumentDescription = "[on or off. default: toggle]",
+              .minCountArguments = 0,
+              .maxCountArguments = 1,
+              .possibleArguments = HOTKEY_ARG_ON_OFF_TOGGLE,
+              .argumentsPrompt = "New value:",
+              .argumentsPromptHover =
+                  "Should chat message sounds be enabled, disabled or toggled",
+          }},
          {"openSubscriptionPage", ActionDefinition{"Open subscription page"}},
          {"changeMultichannelContext",
           ActionDefinition{

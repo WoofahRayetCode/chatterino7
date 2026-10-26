@@ -6,10 +6,15 @@
 
 #include "Application.hpp"
 #include "common/QLogging.hpp"
+#include "controllers/accounts/AccountController.hpp"
 #include "controllers/notifications/NotificationModel.hpp"
+#include "controllers/notifications/ViewerSoundController.hpp"
+#include "controllers/blerp/BlerpController.hpp"
+#include "controllers/social/SocialPostController.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
+#include "providers/kick/KickApi.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
@@ -28,6 +33,9 @@ namespace ranges = std::ranges;
 namespace chatterino {
 
 NotificationController::NotificationController()
+    : socialPosts_(std::make_unique<SocialPostController>())
+    , viewerSounds_(std::make_unique<ViewerSoundController>())
+    , blerp_(std::make_unique<BlerpController>())
 {
     for (const QString &channelName : this->twitchSetting_.getValue())
     {
@@ -48,9 +56,30 @@ NotificationController::NotificationController()
     this->liveStatusTimer_.start(60 * 1000);
 }
 
+NotificationController::~NotificationController() = default;
+
+SocialPostController *NotificationController::socialPosts()
+{
+    return this->socialPosts_.get();
+}
+
+ViewerSoundController *NotificationController::viewerSounds()
+{
+    return this->viewerSounds_.get();
+}
+
+BlerpController *NotificationController::blerp()
+{
+    return this->blerp_.get();
+}
+
 void NotificationController::initialize()
 {
     this->fetchFakeChannels();
+    if (this->blerp_)
+    {
+        this->blerp_->initialize();
+    }
 }
 
 void NotificationController::updateChannelNotification(
@@ -131,6 +160,11 @@ void NotificationController::notifyTwitchChannelLive(
         streamIt->second = payload.streamId;
     }
 
+    if (this->viewerSounds_)
+    {
+        this->viewerSounds_->resetSessionState("twitch:" + payload.channelName);
+    }
+
     bool showNotification =
         !(getSettings()->suppressInitialLiveNotification &&
           payload.isInitialUpdate) &&
@@ -174,6 +208,62 @@ void NotificationController::notifyTwitchChannelLive(
     {
         this->playSound();
     }
+
+    if (this->socialPosts_)
+    {
+        QString twitchTarget = this->socialPosts_->resolveTwitchTarget();
+        QString kickTarget = this->socialPosts_->resolveKickTarget();
+
+        this->socialPosts_->handleBroadcasterLive({
+            .platform = "Twitch",
+            .channelName = payload.channelName,
+            .displayName = payload.displayName,
+            .streamId = payload.streamId,
+            .title = payload.title,
+            .game = payload.gameName,
+            .url = "https://twitch.tv/" + payload.channelName,
+            .twitchUrl = !twitchTarget.isEmpty()
+                             ? "https://twitch.tv/" + twitchTarget
+                             : "https://twitch.tv/" + payload.channelName,
+            .kickUrl = !kickTarget.isEmpty()
+                           ? "https://kick.com/" + kickTarget
+                           : "",
+            .isInitialUpdate = payload.isInitialUpdate,
+            .isRerun = payload.isRerun,
+        });
+    }
+}
+
+void NotificationController::notifyKickChannelLive(
+    const KickNotificationPayload &payload)
+{
+    if (this->viewerSounds_)
+    {
+        this->viewerSounds_->resetSessionState("kick:" + payload.slug);
+    }
+    if (this->socialPosts_)
+    {
+        QString twitchTarget = this->socialPosts_->resolveTwitchTarget();
+        QString kickTarget = this->socialPosts_->resolveKickTarget();
+
+        this->socialPosts_->handleBroadcasterLive({
+            .platform = "Kick",
+            .channelName = payload.slug,
+            .displayName = payload.displayName,
+            .streamId = "",
+            .title = payload.title,
+            .game = payload.category,
+            .url = "https://kick.com/" + payload.slug,
+            .twitchUrl = !twitchTarget.isEmpty()
+                             ? "https://twitch.tv/" + twitchTarget
+                             : "",
+            .kickUrl = !kickTarget.isEmpty()
+                           ? "https://kick.com/" + kickTarget
+                           : "https://kick.com/" + payload.slug,
+            .isInitialUpdate = payload.isInitialUpdate,
+            .isRerun = false,
+        });
+    }
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -208,6 +298,55 @@ void NotificationController::fetchFakeChannels()
         else
         {
             this->fakeChannels_.erase(name);
+        }
+    }
+
+    if (getSettings()->socialPostEnabled && this->socialPosts_)
+    {
+        QString twitchTarget = this->socialPosts_->resolveTwitchTarget();
+        if (!twitchTarget.isEmpty())
+        {
+            auto chan = getApp()->getTwitch()->getChannelOrEmpty(twitchTarget);
+            if (chan->isEmpty() &&
+                !channels.contains(twitchTarget, Qt::CaseInsensitive))
+            {
+                channels.push_back(twitchTarget);
+            }
+        }
+
+        QString kickTarget = this->socialPosts_->resolveKickTarget();
+        if (!kickTarget.isEmpty() && getApp()->getAccounts()->kick.isLoggedIn())
+        {
+            getKickApi()->getChannelByName(
+                kickTarget, [this, kickTarget](auto expectedInfo) {
+                    if (!expectedInfo)
+                    {
+                        return;
+                    }
+                    bool isLive = expectedInfo->stream.isLive;
+                    auto it = this->fakeKickChannels_.find(kickTarget);
+                    bool isInitial = (it == this->fakeKickChannels_.end());
+                    if (isInitial)
+                    {
+                        this->fakeKickChannels_[kickTarget] = isLive;
+                        return;
+                    }
+                    if (!it->second && isLive)
+                    {
+                        it->second = true;
+                        this->notifyKickChannelLive({
+                            .slug = kickTarget,
+                            .displayName = kickTarget,
+                            .title = expectedInfo->streamTitle,
+                            .category = expectedInfo->category.name,
+                            .isInitialUpdate = false,
+                        });
+                    }
+                    else if (!isLive)
+                    {
+                        it->second = false;
+                    }
+                });
         }
     }
 
@@ -290,13 +429,25 @@ void NotificationController::updateFakeChannel(
         return;
     }
 
+    bool isRerun = false;
+    for (const auto &tag : stream->tags)
+    {
+        if (QString::compare(tag, "Rerun", Qt::CaseInsensitive) == 0)
+        {
+            isRerun = true;
+            break;
+        }
+    }
+
     this->notifyTwitchChannelLive({
         .channelId = stream->userId,
         .streamId = stream->id,
         .channelName = channelName,
         .displayName = stream->userName,
         .title = stream->title,
+        .gameName = stream->gameName,
         .isInitialUpdate = isInitialUpdate,
+        .isRerun = isRerun,
     });
 }
 

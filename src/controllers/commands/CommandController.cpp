@@ -391,6 +391,9 @@ CommandController::CommandController(const Paths &paths)
 
     this->registerCommand("/setgame", &commands::setGame);
 
+    this->registerCommand("/announce-live", &commands::announceLive);
+    this->registerCommand("/blerps", &commands::openBlerpHistory);
+
     this->registerCommand("/openurl", &commands::openURL);
 
     this->registerCommand("/raw", &commands::sendRawMessage);

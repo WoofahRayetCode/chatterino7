@@ -3,6 +3,8 @@
 #include "Application.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/blerp/BlerpController.hpp"
+#include "controllers/notifications/NotificationController.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "providers/kick/KickAccount.hpp"
 #include "providers/kick/KickApi.hpp"
@@ -260,6 +262,35 @@ void KickChatServer::onChatMessage(KickChannel *channel, BoostJsonObject data)
             MessageBuilder::triggerHighlights(channel, highlight);
         }
 
+        const auto kickUser = getApp()->getAccounts()->kick.current();
+        const bool isSelf =
+            (kickUser &&
+             msg->loginName.compare(kickUser->username(),
+                                    Qt::CaseInsensitive) == 0);
+        MessageBuilder::triggerChatMessageSound(channel, msg, isSelf,
+                                                !highlight.sound.isEmpty());
+
+        if (getSettings()->blerpEnabled.getValue() &&
+            getSettings()->blerpDetectChatAndRedemptions.getValue())
+        {
+            if (auto ev = BlerpPayloadParser::parseBotChatMessage(
+                    msg->loginName, msg->messageText, channel->getName(),
+                    getSettings()->blerpBotUsernames.getValue()))
+            {
+                ev->platform = "Kick";
+                if (auto *app = getApp())
+                {
+                    if (auto *notifs = app->getNotifications())
+                    {
+                        if (auto *bc = notifs->blerp())
+                        {
+                            bc->recordBlerp(*ev, false);
+                        }
+                    }
+                }
+            }
+        }
+
         const auto highlighted = msg->flags.has(MessageFlag::Highlighted);
         const auto showInMentions = msg->flags.has(MessageFlag::ShowInMentions);
 
@@ -386,6 +417,32 @@ void KickChatServer::onGiftedSubscriptionEvent(KickChannel *channel,
 void KickChatServer::onRewardRedeemedEvent(KickChannel *channel,
                                            BoostJsonObject data)
 {
+    if (getSettings()->blerpEnabled.getValue() &&
+        getSettings()->blerpDetectChatAndRedemptions.getValue())
+    {
+        const auto reward = data["reward_title"].toQString();
+        if (BlerpPayloadParser::matchesRewardKeywords(
+                reward, getSettings()->blerpRewardKeywords.getValue()))
+        {
+            BlerpEvent ev;
+            ev.platform = "Kick";
+            ev.channelName = channel->getName();
+            ev.username = data["username"].toQString();
+            ev.soundTitle = reward;
+            ev.triggerSource = "Kick Reward";
+            if (auto *app = getApp())
+            {
+                if (auto *notifs = app->getNotifications())
+                {
+                    if (auto *bc = notifs->blerp())
+                    {
+                        bc->recordBlerp(ev, false);
+                    }
+                }
+            }
+        }
+    }
+
     auto msg = KickMessageBuilder::makeRewardRedeemedMessage(channel, data);
     if (msg)
     {

@@ -10,6 +10,7 @@
 #include "common/network/NetworkResult.hpp"  // IWYU pragma: keep
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/blerp/BlerpController.hpp"
 #include "controllers/emotes/EmoteController.hpp"
 #include "controllers/notifications/NotificationController.hpp"
 #include "controllers/twitch/LiveController.hpp"
@@ -527,6 +528,31 @@ void TwitchChannel::addChannelPointReward(const ChannelPointReward &reward)
 {
     assertInGuiThread();
 
+    if (getSettings()->blerpEnabled.getValue() &&
+        getSettings()->blerpDetectChatAndRedemptions.getValue())
+    {
+        if (BlerpPayloadParser::matchesRewardKeywords(
+                reward.title, getSettings()->blerpRewardKeywords.getValue()))
+        {
+            BlerpEvent ev;
+            ev.platform = "Twitch";
+            ev.channelName = this->getName();
+            ev.username = reward.user.displayName;
+            ev.soundTitle = reward.title;
+            ev.triggerSource = "Channel Points";
+            if (auto *app = getApp())
+            {
+                if (auto *notifs = app->getNotifications())
+                {
+                    if (auto *bc = notifs->blerp())
+                    {
+                        bc->recordBlerp(ev, false);
+                    }
+                }
+            }
+        }
+    }
+
     if (!reward.isUserInputRequired)
     {
         const auto [msg, highlights] =
@@ -678,10 +704,14 @@ void TwitchChannel::onLiveStatusChanged(bool isLive, bool isInitialUpdate)
 
         QString streamId;
         QString title;
+        QString gameName;
+        bool isRerun = false;
         {
             const auto streamStatus = this->accessStreamStatus();
             streamId = streamStatus->streamId;
             title = streamStatus->title;
+            gameName = streamStatus->game;
+            isRerun = streamStatus->rerun;
         }
         getApp()->getNotifications()->notifyTwitchChannelLive({
             .channelId = this->roomId(),
@@ -689,7 +719,9 @@ void TwitchChannel::onLiveStatusChanged(bool isLive, bool isInitialUpdate)
             .channelName = this->getName(),
             .displayName = channel.displayName,
             .title = title,
+            .gameName = gameName,
             .isInitialUpdate = isInitialUpdate,
+            .isRerun = isRerun,
         });
 
         // Channel live message

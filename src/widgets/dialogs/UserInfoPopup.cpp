@@ -14,6 +14,8 @@
 #include "controllers/commands/CommandController.hpp"
 #include "controllers/highlights/HighlightBlacklistUser.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
+#include "controllers/notifications/NotificationController.hpp"
+#include "controllers/notifications/ViewerSoundController.hpp"
 #include "controllers/userdata/UserDataController.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
@@ -33,6 +35,7 @@
 #include "singletons/WindowManager.hpp"
 #include "util/Clipboard.hpp"
 #include "util/FormatTime.hpp"
+#include "widgets/dialogs/ViewerSoundDialog.hpp"
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
 #include "util/PostToThread.hpp"
@@ -492,6 +495,8 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
 
         user.emplace<LabelButton>("Add notes", this)
             .assign(&this->ui_.notesAdd);
+        user.emplace<LabelButton>("Viewer sound", this)
+            .assign(&this->ui_.viewerSound);
         auto usercard = user.emplace<LabelButton>("Usercard", this)
                             .assign(&this->ui_.usercardLabel);
         auto mod = user.emplace<PixmapButton>(this);
@@ -513,6 +518,71 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             QDesktopServices::openUrl("https://www.twitch.tv/popout/" +
                                       this->underlyingChannel_->getName() +
                                       "/viewercard/" + this->userName_);
+        });
+
+        QObject::connect(this->ui_.viewerSound, &Button::leftClicked, [this] {
+            if (this->userName_.isEmpty())
+            {
+                return;
+            }
+
+            QString chanName = this->underlyingChannel_
+                                   ? this->underlyingChannel_->getName()
+                                   : "";
+            QString platform =
+                (this->underlyingChannel_ && this->underlyingChannel_->isKickChannel())
+                    ? "kick"
+                    : "twitch";
+
+            ViewerSoundRule initialRule;
+            bool isNew = true;
+
+            if (auto *app = getApp())
+            {
+                if (auto *notifs = app->getNotifications())
+                {
+                    if (auto *vs = notifs->viewerSounds())
+                    {
+                        if (auto existing = vs->findMatchingRule(
+                                this->userName_, platform, chanName))
+                        {
+                            initialRule = *existing;
+                            isNew = false;
+                        }
+                    }
+                }
+            }
+
+            if (isNew)
+            {
+                initialRule.username = this->userName_;
+                initialRule.channelFilter = chanName;
+                initialRule.enabled = true;
+                initialRule.playOnJoin = true;
+            }
+
+            ViewerSoundDialog dialog(initialRule, isNew, chanName, this);
+            if (dialog.exec() == QDialog::Accepted)
+            {
+                if (auto *app = getApp())
+                {
+                    if (auto *notifs = app->getNotifications())
+                    {
+                        if (auto *vs = notifs->viewerSounds())
+                        {
+                            if (dialog.wasRemoved())
+                            {
+                                vs->removeRule(initialRule.username,
+                                               initialRule.channelFilter);
+                            }
+                            else
+                            {
+                                vs->upsertRule(dialog.rule());
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         QObject::connect(mod.getElement(), &Button::leftClicked, [this] {

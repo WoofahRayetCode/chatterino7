@@ -758,6 +758,35 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
         }
     }
 
+    if (this->split_->getSelectedChannel()->isTwitchOrKickChannel())
+    {
+        auto *action = new QAction(this);
+        action->setText("Play sound on chat messages");
+        action->setCheckable(true);
+
+        auto notifySeq = h->getDisplaySequence(
+            HotkeyCategory::Split, "setChatMessageSounds", {{"toggle"}});
+        if (notifySeq.isEmpty())
+        {
+            notifySeq = h->getDisplaySequence(HotkeyCategory::Split,
+                                              "setChatMessageSounds",
+                                              {std::vector<QString>()});
+        }
+        action->setShortcut(notifySeq);
+
+        QObject::connect(
+            moreMenu, &QMenu::aboutToShow, this, [action, this]() {
+                action->setChecked(getSettings()->isChatSoundChannel(
+                    this->split_->getSelectedChannel()->getName()));
+            });
+        QObject::connect(action, &QAction::triggered, this, [this]() {
+            getSettings()->toggleChatSoundChannel(
+                this->split_->getSelectedChannel()->getName());
+        });
+
+        moreMenu->addAction(action);
+    }
+
     moreMenu->addSeparator();
     moreMenu->addAction(
         "Clear messages",

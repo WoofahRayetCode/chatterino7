@@ -17,6 +17,9 @@ class Paths;
 struct HelixStream;
 
 class NotificationModel;
+class SocialPostController;
+class ViewerSoundController;
+class BlerpController;
 
 enum class Platform : uint8_t {
     Twitch,  // 0
@@ -26,6 +29,7 @@ class NotificationController final
 {
 public:
     NotificationController();
+    ~NotificationController();
 
     // Perform an initial load so we don't have to wait for the timer
     void initialize();
@@ -41,6 +45,16 @@ public:
         QString channelName;
         QString displayName;
         QString title;
+        QString gameName;
+        bool isInitialUpdate = false;
+        bool isRerun = false;
+    };
+
+    struct KickNotificationPayload {
+        QString slug;
+        QString displayName;
+        QString title;
+        QString category;
         bool isInitialUpdate = false;
     };
 
@@ -48,6 +62,9 @@ public:
     ///
     /// Duplicate calls for the same stream have no effect
     void notifyTwitchChannelLive(const NotificationPayload &payload);
+
+    /// @brief Sends out notifications for a Kick channel that has gone live
+    void notifyKickChannelLive(const KickNotificationPayload &payload);
 
     /// @brief Sends out notifications for a channel that has gone offline
     ///
@@ -57,6 +74,10 @@ public:
     void playSound() const;
 
     NotificationModel *createModel(QObject *parent, Platform p);
+
+    SocialPostController *socialPosts();
+    ViewerSoundController *viewerSounds();
+    BlerpController *blerp();
 
 private:
     void fetchFakeChannels();
@@ -74,6 +95,7 @@ private:
     /// These channels won't be tracked in LiveController.
     /// Channels are identified by their login name (case insensitive).
     std::map<QString, FakeChannel, QCompareCaseInsensitive> fakeChannels_;
+    std::map<QString, bool, QCompareCaseInsensitive> fakeKickChannels_;
 
     /// Maps channel IDs to their most recently notified stream IDs
     std::map<QString, QString> lastNotifiedStreamIds_;
@@ -84,6 +106,10 @@ private:
 
     ChatterinoSetting<std::vector<QString>> twitchSetting_ = {
         "/notifications/twitch"};
+
+    std::unique_ptr<SocialPostController> socialPosts_;
+    std::unique_ptr<ViewerSoundController> viewerSounds_;
+    std::unique_ptr<BlerpController> blerp_;
 };
 
 }  // namespace chatterino

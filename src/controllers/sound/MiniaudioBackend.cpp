@@ -248,6 +248,15 @@ MiniaudioBackend::~MiniaudioBackend()
             }
         }
 
+        for (auto &slot : this->customSounds)
+        {
+            if (slot.initialized && slot.sound)
+            {
+                ma_sound_uninit(slot.sound.get());
+                slot.initialized = false;
+            }
+        }
+
         ma_engine_uninit(this->engine.get());
         ma_context_uninit(this->context.get());
     });
@@ -268,7 +277,7 @@ MiniaudioBackend::~MiniaudioBackend()
     }
 }
 
-void MiniaudioBackend::play(const QUrl &sound)
+void MiniaudioBackend::play(const QUrl &sound, float volume)
 {
     if (this->state != State::Initialized)
     {
@@ -277,7 +286,13 @@ void MiniaudioBackend::play(const QUrl &sound)
         return;
     }
 
-    boost::asio::post(this->ioContext, [this, sound] {
+    const float clampedVolume = std::clamp(volume, 0.0F, 1.0F);
+    if (clampedVolume <= 0.0F)
+    {
+        return;
+    }
+
+    boost::asio::post(this->ioContext, [this, sound, clampedVolume] {
         static size_t i = 0;
 
         this->tgPlay.guard();
@@ -299,12 +314,40 @@ void MiniaudioBackend::play(const QUrl &sound)
         if (sound.isLocalFile())
         {
             auto soundPath = sound.toLocalFile();
-            result = ma_engine_play_sound(this->engine.get(),
-                                          qPrintable(soundPath), nullptr);
+            auto &slot =
+                this->customSounds[++this->customSoundIdx % NUM_CUSTOM_SOUNDS];
+            if (slot.initialized && slot.sound)
+            {
+                ma_sound_uninit(slot.sound.get());
+                slot.initialized = false;
+            }
+            if (!slot.sound)
+            {
+                slot.sound = std::make_unique<ma_sound>();
+            }
+
+            result = ma_sound_init_from_file(
+                this->engine.get(), qPrintable(soundPath),
+                MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION |
+                    MA_SOUND_FLAG_ASYNC,
+                nullptr, nullptr, slot.sound.get());
             if (result != MA_SUCCESS)
             {
-                qCWarning(chatterinoSound) << "Failed to play sound" << sound
-                                           << soundPath << ":" << result;
+                qCWarning(chatterinoSound) << "Failed to init custom sound"
+                                           << sound << soundPath << ":"
+                                           << result;
+            }
+            else
+            {
+                slot.initialized = true;
+                ma_sound_set_volume(slot.sound.get(), clampedVolume);
+                result = ma_sound_start(slot.sound.get());
+                if (result != MA_SUCCESS)
+                {
+                    qCWarning(chatterinoSound)
+                        << "Failed to start custom sound" << sound << soundPath
+                        << ":" << result;
+                }
             }
         }
         else
@@ -315,6 +358,7 @@ void MiniaudioBackend::play(const QUrl &sound)
                 // Play default sound, loaded from our resources in the constructor
                 // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index, cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                 auto &snd = defaultSoundIt->second.sounds[++i % NUM_SOUNDS];
+                ma_sound_set_volume(snd.get(), clampedVolume);
                 ma_sound_seek_to_pcm_frame(snd.get(), 0);
                 result = ma_sound_start(snd.get());
                 if (result != MA_SUCCESS)

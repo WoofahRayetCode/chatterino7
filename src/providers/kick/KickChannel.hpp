@@ -216,6 +216,7 @@ private:
     bool isVip_ = false;
 
     StreamData streamData_;
+    bool initializedLiveState_ = false;
 
     std::map<unsigned, ImagePtr> subBadgeImages_;
     std::unordered_map<unsigned, EmotePtr> subBadges_;

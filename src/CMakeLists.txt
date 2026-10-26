@@ -291,10 +291,23 @@ set(SOURCE_FILES
         controllers/nicknames/NicknamesModel.hpp
         controllers/nicknames/Nickname.hpp
 
+        controllers/notifications/ChatSoundChannelModel.cpp
+        controllers/notifications/ChatSoundChannelModel.hpp
         controllers/notifications/NotificationController.cpp
         controllers/notifications/NotificationController.hpp
         controllers/notifications/NotificationModel.cpp
         controllers/notifications/NotificationModel.hpp
+        controllers/notifications/ViewerSoundController.cpp
+        controllers/notifications/ViewerSoundController.hpp
+        controllers/notifications/ViewerSoundModel.cpp
+        controllers/notifications/ViewerSoundModel.hpp
+        controllers/notifications/ViewerSoundRule.hpp
+
+        controllers/blerp/BlerpClient.cpp
+        controllers/blerp/BlerpClient.hpp
+        controllers/blerp/BlerpController.cpp
+        controllers/blerp/BlerpController.hpp
+        controllers/blerp/BlerpEvent.hpp
 
         controllers/pings/MutedChannelModel.cpp
         controllers/pings/MutedChannelModel.hpp
@@ -351,6 +364,15 @@ set(SOURCE_FILES
         controllers/plugins/PluginRef.hpp
         controllers/plugins/SolTypes.cpp
         controllers/plugins/SolTypes.hpp
+
+        controllers/social/BlueskyClient.cpp
+        controllers/social/BlueskyClient.hpp
+        controllers/social/LivePostTemplate.cpp
+        controllers/social/LivePostTemplate.hpp
+        controllers/social/SocialPostController.cpp
+        controllers/social/SocialPostController.hpp
+        controllers/social/TwitterClient.cpp
+        controllers/social/TwitterClient.hpp
 
         controllers/sound/ISoundController.hpp
         controllers/sound/MiniaudioBackend.cpp
@@ -819,6 +841,8 @@ set(SOURCE_FILES
         widgets/dialogs/KickLoginPage.hpp
         widgets/dialogs/LastRunCrashDialog.cpp
         widgets/dialogs/LastRunCrashDialog.hpp
+        widgets/dialogs/LivePostConfirmDialog.cpp
+        widgets/dialogs/LivePostConfirmDialog.hpp
         widgets/dialogs/LoginDialog.cpp
         widgets/dialogs/LoginDialog.hpp
         widgets/dialogs/QualityPopup.cpp
@@ -835,6 +859,10 @@ set(SOURCE_FILES
         widgets/dialogs/SettingsDialog.hpp
         widgets/dialogs/UpdateDialog.cpp
         widgets/dialogs/UpdateDialog.hpp
+        widgets/dialogs/ViewerSoundDialog.cpp
+        widgets/dialogs/ViewerSoundDialog.hpp
+        widgets/dialogs/BlerpHistoryDialog.cpp
+        widgets/dialogs/BlerpHistoryDialog.hpp
         widgets/dialogs/UserInfoPopup.cpp
         widgets/dialogs/UserInfoPopup.hpp
         widgets/dialogs/WelcomeDialog.cpp
